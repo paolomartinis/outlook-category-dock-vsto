@@ -65,7 +65,7 @@ namespace CategoryDockVsto
             { "Language", "Lingua" },
             { "Theme", "Macrotema" },
             { "AllThemes", "Tutti i macrotemi" },
-            { "NoTheme", "Generale" },
+            { "NoTheme", "General" },
             { "MacroCategories", "Macrocategorie" },
             { "MacroName", "Nome macrocategoria" },
             { "Rename", "Rinomina" },

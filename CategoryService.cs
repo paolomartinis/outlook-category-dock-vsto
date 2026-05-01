@@ -582,9 +582,18 @@ namespace CategoryDockVsto
 
         private void EnsureDefaultThemeCatalog()
         {
+            themeCatalog.Remove("Generale");
             themeCatalog.Add("General");
             themeCatalog.Add("Projects");
-            themeCatalog.Add(AppText.Get(GetLanguage(), "NoTheme"));
+            foreach (string categoryName in themes.Keys.ToList())
+            {
+                if (string.Equals(themes[categoryName], "Generale", StringComparison.CurrentCultureIgnoreCase))
+                {
+                    themes.Remove(categoryName);
+                }
+            }
+
+            SaveThemes();
             SaveThemeCatalog();
         }
 
@@ -595,8 +604,7 @@ namespace CategoryDockVsto
 
         private bool IsDefaultTheme(string name)
         {
-            return string.Equals(name, "General", StringComparison.CurrentCultureIgnoreCase)
-                || string.Equals(name, AppText.Get(GetLanguage(), "NoTheme"), StringComparison.CurrentCultureIgnoreCase);
+            return string.Equals(name, "General", StringComparison.CurrentCultureIgnoreCase);
         }
     }
 }
