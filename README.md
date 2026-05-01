@@ -6,6 +6,10 @@ Outlook classic VSTO add-in for category assignment, category management, and ca
 
 Current development package: **1.1**.
 
+## Documentation
+
+See the [GitHub Wiki](https://github.com/paolomartinis/outlook-category-dock-vsto/wiki) for installation, usage, and release notes.
+
 ## Requirements
 
 - Outlook classic for Windows.
