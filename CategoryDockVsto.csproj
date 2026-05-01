@@ -224,6 +224,7 @@
     <Compile Include="ThisAddIn.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="AppText.cs" />
     <Compile Include="CategoryDockForm.cs" />
     <Compile Include="CategoryService.cs" />
     <Compile Include="CategoryDockRibbon.cs" />

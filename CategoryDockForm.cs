@@ -17,10 +17,18 @@ namespace CategoryDockVsto
         private readonly TextBox queryBox = new TextBox();
         private readonly TextBox nameBox = new TextBox();
         private readonly ComboBox colorBox = new ComboBox();
+        private readonly ComboBox themeBox = new ComboBox();
+        private readonly ComboBox assignThemeBox = new ComboBox();
+        private readonly ComboBox filterThemeBox = new ComboBox();
+        private readonly ComboBox languageBox = new ComboBox();
+        private readonly ListBox macroThemeList = new ListBox();
+        private readonly TextBox macroThemeBox = new TextBox();
         private readonly CheckBox showHiddenBox = new CheckBox();
         private readonly CheckBox requireAllBox = new CheckBox();
         private readonly Label status = new Label();
         private readonly ToolTip toolTip = new ToolTip();
+        private string language;
+        private bool refreshing;
 
         public CategoryDockForm(CategoryService service)
         {
@@ -30,6 +38,7 @@ namespace CategoryDockVsto
             MinimumSize = new Size(120, 320);
             Font = new Font("Segoe UI", 8.5f);
             Margin = new Padding(0);
+            language = service.GetLanguage();
 
             BuildUi();
             RefreshAll();
@@ -48,9 +57,11 @@ namespace CategoryDockVsto
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
 
             tabs.Dock = DockStyle.Fill;
+            tabs.TabPages.Clear();
             tabs.TabPages.Add(BuildAssignTab());
             tabs.TabPages.Add(BuildManageTab());
             tabs.TabPages.Add(BuildFilterTab());
+            tabs.TabPages.Add(BuildSettingsTab());
 
             status.AutoEllipsis = true;
             status.Dock = DockStyle.Fill;
@@ -63,13 +74,24 @@ namespace CategoryDockVsto
 
         private TabPage BuildAssignTab()
         {
-            var tab = new TabPage("Assegna");
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, Padding = new Padding(4) };
+            var tab = new TabPage(T("Assign"));
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, ColumnCount = 1, Padding = new Padding(4) };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+            SetupThemeFilter(assignThemeBox);
+            assignThemeBox.SelectedIndexChanged += (_, __) =>
+            {
+                if (!refreshing)
+                {
+                    RefreshAll();
+                }
+            };
+            layout.Controls.Add(assignThemeBox, 0, 0);
 
             assignList.Dock = DockStyle.Fill;
             assignList.DrawMode = DrawMode.OwnerDrawFixed;
@@ -77,23 +99,24 @@ namespace CategoryDockVsto
             assignList.FormattingEnabled = true;
             assignList.DrawItem += DrawCategoryListItem;
             assignList.DoubleClick += (_, __) => ApplySelected();
-            layout.Controls.Add(assignList, 0, 0);
+            layout.Controls.Add(assignList, 0, 1);
 
-            var apply = Button("Applica", (_, __) => ApplySelected());
-            var remove = Button("Rimuovi", (_, __) => RemoveSelected());
-            var removeAll = Button("Rimuovi tutte", (_, __) => ClearAllSelected());
-            layout.Controls.Add(apply, 0, 1);
-            layout.Controls.Add(remove, 0, 2);
-            layout.Controls.Add(removeAll, 0, 3);
+            var apply = Button(T("Apply"), (_, __) => ApplySelected());
+            var remove = Button(T("Remove"), (_, __) => RemoveSelected());
+            var removeAll = Button(T("RemoveAll"), (_, __) => ClearAllSelected());
+            layout.Controls.Add(apply, 0, 2);
+            layout.Controls.Add(remove, 0, 3);
+            layout.Controls.Add(removeAll, 0, 4);
             tab.Controls.Add(layout);
             return tab;
         }
 
         private TabPage BuildManageTab()
         {
-            var tab = new TabPage("Gestisci");
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 7, ColumnCount = 2, Padding = new Padding(4) };
+            var tab = new TabPage(T("Manage"));
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 8, ColumnCount = 2, Padding = new Padding(4) };
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -103,7 +126,7 @@ namespace CategoryDockVsto
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
-            showHiddenBox.Text = "Mostra nascoste";
+            showHiddenBox.Text = T("ShowHidden");
             showHiddenBox.Dock = DockStyle.Fill;
             showHiddenBox.AutoSize = false;
             showHiddenBox.CheckedChanged += (_, __) => RefreshAll();
@@ -130,21 +153,28 @@ namespace CategoryDockVsto
             layout.Controls.Add(colorBox, 0, 2);
             layout.SetColumnSpan(colorBox, 2);
 
+            themeBox.DropDownStyle = ComboBoxStyle.DropDown;
+            themeBox.Dock = DockStyle.Fill;
+            themeBox.Margin = new Padding(0, 1, 0, 1);
+            themeBox.MinimumSize = new Size(0, 0);
+            layout.Controls.Add(themeBox, 0, 3);
+            layout.SetColumnSpan(themeBox, 2);
+
             manageList.Dock = DockStyle.Fill;
             manageList.Margin = new Padding(0, 2, 0, 2);
             manageList.DrawMode = DrawMode.OwnerDrawFixed;
             manageList.ItemHeight = 22;
             manageList.DrawItem += DrawCategoryListItem;
             manageList.SelectedIndexChanged += (_, __) => LoadSelectedManageCategory();
-            layout.Controls.Add(manageList, 0, 3);
+            layout.Controls.Add(manageList, 0, 4);
             layout.SetColumnSpan(manageList, 2);
 
-            layout.Controls.Add(Button("Salva", (_, __) => SaveCategory()), 0, 4);
-            layout.Controls.Add(Button("Nascondi", (_, __) => HideSelected(true)), 1, 4);
-            layout.Controls.Add(Button("Mostra", (_, __) => HideSelected(false)), 0, 5);
-            layout.Controls.Add(Button("Nuova", (_, __) => ClearEditor()), 1, 5);
-            layout.Controls.Add(Button("Elimina", (_, __) => DeleteSelected()), 0, 6);
-            layout.Controls.Add(Button("Aggiorna", (_, __) => RefreshAll()), 1, 6);
+            layout.Controls.Add(Button(T("Save"), (_, __) => SaveCategory()), 0, 5);
+            layout.Controls.Add(Button(T("Hide"), (_, __) => HideSelected(true)), 1, 5);
+            layout.Controls.Add(Button(T("Show"), (_, __) => HideSelected(false)), 0, 6);
+            layout.Controls.Add(Button(T("New"), (_, __) => ClearEditor()), 1, 6);
+            layout.Controls.Add(Button(T("Delete"), (_, __) => DeleteSelected()), 0, 7);
+            layout.Controls.Add(Button(T("Refresh"), (_, __) => RefreshAll()), 1, 7);
 
             tab.Controls.Add(layout);
             return tab;
@@ -152,9 +182,10 @@ namespace CategoryDockVsto
 
         private TabPage BuildFilterTab()
         {
-            var tab = new TabPage("Filtra");
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6, ColumnCount = 1, Padding = new Padding(4) };
+            var tab = new TabPage(T("Filter"));
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 7, ColumnCount = 1, Padding = new Padding(4) };
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
@@ -166,11 +197,21 @@ namespace CategoryDockVsto
             queryBox.Dock = DockStyle.Fill;
             layout.Controls.Add(queryBox, 0, 0);
 
-            requireAllBox.Text = "Tutte";
+            SetupThemeFilter(filterThemeBox);
+            filterThemeBox.SelectedIndexChanged += (_, __) =>
+            {
+                if (!refreshing)
+                {
+                    RefreshAll();
+                }
+            };
+            layout.Controls.Add(filterThemeBox, 0, 1);
+
+            requireAllBox.Text = T("RequireAll");
             requireAllBox.Dock = DockStyle.Fill;
             requireAllBox.AutoSize = false;
             requireAllBox.CheckedChanged += (_, __) => UpdateQuery();
-            layout.Controls.Add(requireAllBox, 0, 1);
+            layout.Controls.Add(requireAllBox, 0, 2);
 
             filterList.Dock = DockStyle.Fill;
             filterList.DrawMode = DrawMode.OwnerDrawFixed;
@@ -179,11 +220,67 @@ namespace CategoryDockVsto
             filterList.DrawItem += DrawCategoryListItem;
             filterList.SelectionMode = SelectionMode.MultiExtended;
             filterList.SelectedIndexChanged += (_, __) => UpdateQuery();
-            layout.Controls.Add(filterList, 0, 2);
+            layout.Controls.Add(filterList, 0, 3);
 
-            layout.Controls.Add(Button("Cerca", (_, __) => RunSearch()), 0, 3);
-            layout.Controls.Add(Button("Copia", (_, __) => Clipboard.SetText(queryBox.Text)), 0, 4);
-            layout.Controls.Add(Button("Aggiorna", (_, __) => RefreshAll()), 0, 5);
+            layout.Controls.Add(Button(T("Search"), (_, __) => RunSearch()), 0, 4);
+            layout.Controls.Add(Button(T("Copy"), (_, __) => Clipboard.SetText(queryBox.Text)), 0, 5);
+            layout.Controls.Add(Button(T("Refresh"), (_, __) => RefreshAll()), 0, 6);
+
+            tab.Controls.Add(layout);
+            return tab;
+        }
+
+        private TabPage BuildSettingsTab()
+        {
+            var tab = new TabPage("\u2699") { ToolTipText = T("Settings") };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 9, ColumnCount = 2, Padding = new Padding(4) };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+
+            var label = new Label { Text = T("Language"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+            languageBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            languageBox.Dock = DockStyle.Fill;
+            languageBox.Items.Clear();
+            languageBox.Items.Add(new LanguageOption("English", AppText.English));
+            languageBox.Items.Add(new LanguageOption("Italiano", AppText.Italian));
+            languageBox.SelectedIndex = language == AppText.Italian ? 1 : 0;
+            languageBox.SelectedIndexChanged += (_, __) => ChangeLanguage();
+
+            layout.Controls.Add(label, 0, 0);
+            layout.SetColumnSpan(label, 2);
+            layout.Controls.Add(languageBox, 0, 1);
+            layout.SetColumnSpan(languageBox, 2);
+
+            var macroLabel = new Label { Text = T("MacroCategories"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+            layout.Controls.Add(macroLabel, 0, 2);
+            layout.SetColumnSpan(macroLabel, 2);
+
+            macroThemeList.Dock = DockStyle.Fill;
+            macroThemeList.IntegralHeight = false;
+            macroThemeList.SelectedIndexChanged += (_, __) => LoadSelectedMacroTheme();
+            layout.Controls.Add(macroThemeList, 0, 3);
+            layout.SetColumnSpan(macroThemeList, 2);
+
+            macroThemeBox.Dock = DockStyle.Fill;
+            macroThemeBox.Margin = new Padding(0, 1, 0, 1);
+            layout.Controls.Add(macroThemeBox, 0, 4);
+            layout.SetColumnSpan(macroThemeBox, 2);
+
+            layout.Controls.Add(Button(T("New"), (_, __) => ClearMacroThemeEditor()), 0, 5);
+            layout.Controls.Add(Button(T("Save"), (_, __) => AddMacroTheme()), 1, 5);
+            layout.Controls.Add(Button(T("Rename"), (_, __) => RenameMacroTheme()), 0, 6);
+            layout.Controls.Add(Button(T("Delete"), (_, __) => DeleteMacroTheme()), 1, 6);
+            layout.Controls.Add(Button(T("Refresh"), (_, __) => RefreshAll()), 0, 7);
+            layout.SetColumnSpan(layout.GetControlFromPosition(0, 7), 2);
 
             tab.Controls.Add(layout);
             return tab;
@@ -212,30 +309,40 @@ namespace CategoryDockVsto
 
         private void RefreshAll()
         {
-            var visibleCategories = service.GetCategories(false);
-            var allCategories = service.GetCategories(showHiddenBox.Checked);
-            var applied = new HashSet<string>(service.GetAppliedCategoriesOnSelectionLead(), StringComparer.CurrentCultureIgnoreCase);
-
-            assignList.Items.Clear();
-            foreach (var category in visibleCategories)
+            if (refreshing)
             {
-                assignList.Items.Add(category);
+                return;
             }
 
-            manageList.Items.Clear();
-            foreach (var category in allCategories)
+            refreshing = true;
+            try
             {
-                manageList.Items.Add(category);
-            }
+                var visibleCategories = service.GetCategories(false);
+                var allCategories = service.GetCategories(showHiddenBox.Checked);
 
-            filterList.Items.Clear();
-            foreach (var category in visibleCategories)
+                RefreshThemes();
+                assignList.Items.Clear();
+                AddGroupedCategories(assignList, FilterByTheme(visibleCategories, assignThemeBox.Text));
+
+                manageList.Items.Clear();
+                AddGroupedCategories(manageList, allCategories);
+
+                filterList.Items.Clear();
+                AddGroupedCategories(filterList, FilterByTheme(visibleCategories, filterThemeBox.Text));
+
+                RefreshMacroThemeList();
+                UpdateQuery();
+                status.Text = service.SelectedCount() + " " + T("Selected");
+            }
+            catch (Exception exception)
             {
-                filterList.Items.Add(category);
+                Logger.Write(exception);
+                status.Text = exception.Message;
             }
-
-            UpdateQuery();
-            status.Text = service.SelectedCount() + " selected item(s)";
+            finally
+            {
+                refreshing = false;
+            }
         }
 
         private void ApplySelected()
@@ -247,7 +354,7 @@ namespace CategoryDockVsto
             }
 
             int changed = service.ApplyCategoryToSelection(category.Name);
-            status.Text = changed + " item(s) updated";
+            status.Text = changed + " " + T("Updated");
             RefreshAll();
         }
 
@@ -260,14 +367,14 @@ namespace CategoryDockVsto
             }
 
             int changed = service.RemoveCategoryFromSelection(category.Name);
-            status.Text = changed + " item(s) updated";
+            status.Text = changed + " " + T("Updated");
             RefreshAll();
         }
 
         private void ClearAllSelected()
         {
             int changed = service.ClearCategoriesFromSelection();
-            status.Text = changed + " item(s) cleared";
+            status.Text = changed + " " + T("Cleared");
             RefreshAll();
         }
 
@@ -283,6 +390,7 @@ namespace CategoryDockVsto
             CategoryInfo selected = manageList.SelectedItem as CategoryInfo;
             if (selected != null)
             {
+                themeBox.Text = selected.Theme;
                 foreach (CategoryColorOption option in colorBox.Items)
                 {
                     if (option.Color == selected.Color)
@@ -305,8 +413,8 @@ namespace CategoryDockVsto
 
             try
             {
-                service.AddOrUpdateCategory(selected, name, ((CategoryColorOption)colorBox.SelectedItem).Color);
-                status.Text = "Category saved";
+                service.AddOrUpdateCategory(selected, name, ((CategoryColorOption)colorBox.SelectedItem).Color, themeBox.Text);
+                status.Text = T("Saved");
                 RefreshAll();
             }
             catch (Exception exception)
@@ -336,7 +444,7 @@ namespace CategoryDockVsto
                 return;
             }
 
-            if (MessageBox.Show("Delete category \"" + name + "\"?", "Category Dock", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            if (MessageBox.Show(T("DeleteConfirm") + " \"" + name + "\"?", "Category Dock", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
                 service.DeleteCategory(name);
                 RefreshAll();
@@ -347,10 +455,68 @@ namespace CategoryDockVsto
         {
             manageList.ClearSelected();
             nameBox.Clear();
+            themeBox.Text = T("NoTheme");
             if (colorBox.Items.Count > 0)
             {
                 colorBox.SelectedIndex = 0;
             }
+        }
+
+        private void LoadSelectedMacroTheme()
+        {
+            if (macroThemeList.SelectedItem == null)
+            {
+                return;
+            }
+
+            macroThemeBox.Text = Convert.ToString(macroThemeList.SelectedItem);
+        }
+
+        private void ClearMacroThemeEditor()
+        {
+            macroThemeList.ClearSelected();
+            macroThemeBox.Clear();
+            macroThemeBox.Focus();
+        }
+
+        private void AddMacroTheme()
+        {
+            service.AddTheme(macroThemeBox.Text);
+            status.Text = T("MacroSaved");
+            RefreshAll();
+        }
+
+        private void RenameMacroTheme()
+        {
+            string oldName = Convert.ToString(macroThemeList.SelectedItem);
+            if (string.IsNullOrWhiteSpace(oldName))
+            {
+                AddMacroTheme();
+                return;
+            }
+
+            service.RenameTheme(oldName, macroThemeBox.Text);
+            status.Text = T("MacroSaved");
+            RefreshAll();
+        }
+
+        private void DeleteMacroTheme()
+        {
+            string name = Convert.ToString(macroThemeList.SelectedItem);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+
+            if (!service.DeleteTheme(name))
+            {
+                status.Text = T("CannotDeleteGeneral");
+                return;
+            }
+
+            macroThemeBox.Clear();
+            status.Text = T("MacroDeleted");
+            RefreshAll();
         }
 
         private void UpdateQuery()
@@ -365,7 +531,7 @@ namespace CategoryDockVsto
 
         private IEnumerable<string> CheckedFilterNames()
         {
-            return filterList.SelectedItems.Cast<CategoryInfo>().Select(item => item.Name);
+            return filterList.SelectedItems.Cast<object>().OfType<CategoryInfo>().Select(item => item.Name);
         }
 
         private string SelectedManageName()
@@ -375,7 +541,8 @@ namespace CategoryDockVsto
                 return string.Empty;
             }
 
-            return ((CategoryInfo)manageList.SelectedItem).Name;
+            CategoryInfo category = manageList.SelectedItem as CategoryInfo;
+            return category == null ? string.Empty : category.Name;
         }
 
         private void DrawCategoryListItem(object sender, DrawItemEventArgs e)
@@ -387,6 +554,28 @@ namespace CategoryDockVsto
 
             e.DrawBackground();
             object item = sender is ComboBox combo ? combo.Items[e.Index] : ((ListBox)sender).Items[e.Index];
+            CategoryGroupHeader header = item as CategoryGroupHeader;
+            if (header != null)
+            {
+                using (Brush brush = new SolidBrush(Color.FromArgb(245, 245, 245)))
+                {
+                    e.Graphics.FillRectangle(brush, e.Bounds);
+                }
+
+                using (Font headerFont = new Font(e.Font, FontStyle.Bold))
+                {
+                    TextRenderer.DrawText(
+                        e.Graphics,
+                        header.Name,
+                        headerFont,
+                        new Rectangle(e.Bounds.Left + 4, e.Bounds.Top + 2, e.Bounds.Width - 8, e.Bounds.Height - 2),
+                        Color.FromArgb(80, 80, 80),
+                        TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
+                }
+
+                return;
+            }
+
             CategoryInfo category = item as CategoryInfo;
             string text = category == null ? Convert.ToString(item) : category.ToString();
             Color color = category == null ? Color.LightGray : ToDrawingColor(category.Color);
@@ -493,6 +682,138 @@ namespace CategoryDockVsto
             string name = color.ToString().Replace("olCategoryColor", string.Empty);
             return string.Concat(name.SelectMany((ch, index) =>
                 index > 0 && char.IsUpper(ch) ? new[] { ' ', ch } : new[] { ch }));
+        }
+
+        private void SetupThemeFilter(ComboBox combo)
+        {
+            combo.DropDownStyle = ComboBoxStyle.DropDownList;
+            combo.Dock = DockStyle.Fill;
+            combo.Margin = new Padding(0, 1, 0, 1);
+        }
+
+        private void RefreshThemes()
+        {
+            string assignSelected = string.IsNullOrWhiteSpace(assignThemeBox.Text) ? T("AllThemes") : assignThemeBox.Text;
+            string filterSelected = string.IsNullOrWhiteSpace(filterThemeBox.Text) ? T("AllThemes") : filterThemeBox.Text;
+            string editTheme = themeBox.Text;
+            var filters = new[] { T("AllThemes") }.Concat(service.GetThemes()).Distinct(StringComparer.CurrentCultureIgnoreCase).ToList();
+            SetComboItems(assignThemeBox, filters, assignSelected);
+            SetComboItems(filterThemeBox, filters, filterSelected);
+            SetComboItems(themeBox, service.GetThemes(), string.IsNullOrWhiteSpace(editTheme) ? T("NoTheme") : editTheme);
+        }
+
+        private void RefreshMacroThemeList()
+        {
+            string selected = Convert.ToString(macroThemeList.SelectedItem);
+            macroThemeList.BeginUpdate();
+            macroThemeList.Items.Clear();
+            foreach (string item in service.GetThemes())
+            {
+                macroThemeList.Items.Add(item);
+            }
+
+            object match = macroThemeList.Items.Cast<object>().FirstOrDefault(item => string.Equals(Convert.ToString(item), selected, StringComparison.CurrentCultureIgnoreCase));
+            if (match != null)
+            {
+                macroThemeList.SelectedItem = match;
+            }
+
+            macroThemeList.EndUpdate();
+        }
+
+        private static void SetComboItems(ComboBox combo, IEnumerable<string> items, string selected)
+        {
+            combo.BeginUpdate();
+            combo.Items.Clear();
+            foreach (string item in items)
+            {
+                combo.Items.Add(item);
+            }
+
+            object match = combo.Items.Cast<object>().FirstOrDefault(item => string.Equals(Convert.ToString(item), selected, StringComparison.CurrentCultureIgnoreCase));
+            if (match != null)
+            {
+                combo.SelectedItem = match;
+            }
+            else if (combo.DropDownStyle == ComboBoxStyle.DropDownList && combo.Items.Count > 0)
+            {
+                combo.SelectedIndex = 0;
+            }
+            else
+            {
+                combo.Text = selected;
+            }
+
+            combo.EndUpdate();
+        }
+
+        private IEnumerable<CategoryInfo> FilterByTheme(IEnumerable<CategoryInfo> categories, string theme)
+        {
+            if (string.IsNullOrWhiteSpace(theme) || string.Equals(theme, T("AllThemes"), StringComparison.CurrentCultureIgnoreCase))
+            {
+                return categories;
+            }
+
+            return categories.Where(item => string.Equals(item.Theme, theme, StringComparison.CurrentCultureIgnoreCase));
+        }
+
+        private static void AddGroupedCategories(ListBox list, IEnumerable<CategoryInfo> categories)
+        {
+            foreach (var group in categories.GroupBy(item => item.Theme).OrderBy(item => item.Key, StringComparer.CurrentCultureIgnoreCase))
+            {
+                list.Items.Add(new CategoryGroupHeader(group.Key));
+                foreach (CategoryInfo category in group.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase))
+                {
+                    list.Items.Add(category);
+                }
+            }
+        }
+
+        private void ChangeLanguage()
+        {
+            LanguageOption option = languageBox.SelectedItem as LanguageOption;
+            if (option == null || option.Code == language)
+            {
+                return;
+            }
+
+            language = option.Code;
+            service.SetLanguage(language);
+            Controls.Clear();
+            BuildUi();
+            RefreshAll();
+        }
+
+        private string T(string key)
+        {
+            return AppText.Get(language, key);
+        }
+
+        private sealed class CategoryGroupHeader
+        {
+            public CategoryGroupHeader(string name)
+            {
+                Name = name;
+            }
+
+            public string Name { get; private set; }
+        }
+
+        private sealed class LanguageOption
+        {
+            public LanguageOption(string label, string code)
+            {
+                Label = label;
+                Code = code;
+            }
+
+            public string Label { get; private set; }
+            public string Code { get; private set; }
+
+            public override string ToString()
+            {
+                return Label;
+            }
         }
     }
 }

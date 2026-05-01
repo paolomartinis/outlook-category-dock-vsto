@@ -13,6 +13,7 @@ namespace CategoryDockVsto
         public string Name { get; set; }
         public Outlook.OlCategoryColor Color { get; set; }
         public bool Hidden { get; set; }
+        public string Theme { get; set; }
 
         public override string ToString()
         {
@@ -24,16 +25,27 @@ namespace CategoryDockVsto
     {
         private readonly Outlook.Application application;
         private readonly string hiddenFile;
+        private readonly string themesFile;
+        private readonly string themeCatalogFile;
+        private readonly string settingsFile;
         private readonly HashSet<string> hidden;
+        private readonly Dictionary<string, string> themes;
+        private readonly HashSet<string> themeCatalog;
 
         public CategoryService(Outlook.Application application)
         {
             this.application = application;
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string folder = Path.Combine(appData, "CategoryDockClassic");
+            string folder = Path.Combine(appData, "CategoryDockVsto");
             Directory.CreateDirectory(folder);
             hiddenFile = Path.Combine(folder, "hidden-categories.txt");
+            themesFile = Path.Combine(folder, "category-themes.txt");
+            themeCatalogFile = Path.Combine(folder, "macro-categories.txt");
+            settingsFile = Path.Combine(folder, "settings.ini");
             hidden = LoadHidden();
+            themes = LoadThemes();
+            themeCatalog = LoadThemeCatalog();
+            EnsureDefaultThemeCatalog();
         }
 
         public IReadOnlyList<CategoryInfo> GetCategories(bool includeHidden)
@@ -54,11 +66,114 @@ namespace CategoryDockVsto
                 {
                     Name = category.Name,
                     Color = category.Color,
-                    Hidden = isHidden
+                    Hidden = isHidden,
+                    Theme = GetCategoryTheme(category.Name)
                 });
             }
 
-            return result.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            return result
+                .OrderBy(item => item.Theme, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        public IReadOnlyList<string> GetThemes()
+        {
+            return themes.Values
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Concat(themeCatalog)
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        public void AddTheme(string name)
+        {
+            string normalized = NormalizeThemeName(name);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return;
+            }
+
+            themeCatalog.Add(normalized);
+            SaveThemeCatalog();
+        }
+
+        public void RenameTheme(string oldName, string newName)
+        {
+            string oldNormalized = NormalizeThemeName(oldName);
+            string newNormalized = NormalizeThemeName(newName);
+            if (string.IsNullOrWhiteSpace(oldNormalized) || string.IsNullOrWhiteSpace(newNormalized))
+            {
+                return;
+            }
+
+            if (string.Equals(oldNormalized, newNormalized, StringComparison.CurrentCultureIgnoreCase))
+            {
+                AddTheme(newNormalized);
+                return;
+            }
+
+            themeCatalog.Remove(oldNormalized);
+            themeCatalog.Add(newNormalized);
+
+            foreach (string categoryName in themes.Keys.ToList())
+            {
+                if (string.Equals(themes[categoryName], oldNormalized, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    themes[categoryName] = newNormalized;
+                }
+            }
+
+            SaveThemeCatalog();
+            SaveThemes();
+        }
+
+        public bool DeleteTheme(string name)
+        {
+            string normalized = NormalizeThemeName(name);
+            if (IsDefaultTheme(normalized))
+            {
+                return false;
+            }
+
+            themeCatalog.Remove(normalized);
+            foreach (string categoryName in themes.Keys.ToList())
+            {
+                if (string.Equals(themes[categoryName], normalized, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    themes.Remove(categoryName);
+                }
+            }
+
+            SaveThemeCatalog();
+            SaveThemes();
+            return true;
+        }
+
+        public string GetLanguage()
+        {
+            if (!File.Exists(settingsFile))
+            {
+                return AppText.English;
+            }
+
+            foreach (string line in File.ReadAllLines(settingsFile, Encoding.UTF8))
+            {
+                string[] parts = line.Split(new[] { '=' }, 2);
+                if (parts.Length == 2 && string.Equals(parts[0], "Language", StringComparison.OrdinalIgnoreCase))
+                {
+                    return string.Equals(parts[1], AppText.Italian, StringComparison.OrdinalIgnoreCase) ? AppText.Italian : AppText.English;
+                }
+            }
+
+            return AppText.English;
+        }
+
+        public void SetLanguage(string language)
+        {
+            string value = string.Equals(language, AppText.Italian, StringComparison.OrdinalIgnoreCase) ? AppText.Italian : AppText.English;
+            File.WriteAllLines(settingsFile, new[] { "Language=" + value }, Encoding.UTF8);
         }
 
         public IReadOnlyList<string> GetAppliedCategoriesOnSelectionLead()
@@ -117,7 +232,7 @@ namespace CategoryDockVsto
             return changed;
         }
 
-        public void AddOrUpdateCategory(string originalName, string name, Outlook.OlCategoryColor color)
+        public void AddOrUpdateCategory(string originalName, string name, Outlook.OlCategoryColor color, string theme)
         {
             Outlook.Categories categories = application.Session.Categories;
             Outlook.Category category = FindCategory(originalName);
@@ -125,6 +240,7 @@ namespace CategoryDockVsto
             if (category == null)
             {
                 categories.Add(name, color, Outlook.OlCategoryShortcutKey.olCategoryShortcutKeyNone);
+                SetTheme(name, theme);
                 return;
             }
 
@@ -143,6 +259,13 @@ namespace CategoryDockVsto
                 hidden.Add(name);
                 SaveHidden();
             }
+
+            if (!string.Equals(originalName, name, StringComparison.CurrentCultureIgnoreCase) && themes.ContainsKey(originalName))
+            {
+                themes.Remove(originalName);
+            }
+
+            SetTheme(name, theme);
         }
 
         public void DeleteCategory(string name)
@@ -150,6 +273,8 @@ namespace CategoryDockVsto
             application.Session.Categories.Remove(name);
             hidden.Remove(name);
             SaveHidden();
+            themes.Remove(name);
+            SaveThemes();
         }
 
         public void SetHidden(string name, bool value)
@@ -169,6 +294,36 @@ namespace CategoryDockVsto
         public bool IsHidden(string name)
         {
             return hidden.Contains(name);
+        }
+
+        private string GetCategoryTheme(string categoryName)
+        {
+            if (!string.IsNullOrWhiteSpace(categoryName) && themes.TryGetValue(categoryName, out string theme) && !string.IsNullOrWhiteSpace(theme))
+            {
+                return theme;
+            }
+
+            return AppText.Get(GetLanguage(), "NoTheme");
+        }
+
+        private void SetTheme(string categoryName, string theme)
+        {
+            if (string.IsNullOrWhiteSpace(categoryName))
+            {
+                return;
+            }
+
+            string defaultTheme = AppText.Get(GetLanguage(), "NoTheme");
+            if (string.IsNullOrWhiteSpace(theme) || string.Equals(theme.Trim(), defaultTheme, StringComparison.CurrentCultureIgnoreCase))
+            {
+                themes.Remove(categoryName);
+            }
+            else
+            {
+                themes[categoryName] = theme.Trim();
+            }
+
+            SaveThemes();
         }
 
         public void SearchByCategories(IEnumerable<string> categories, bool requireAll)
@@ -378,6 +533,70 @@ namespace CategoryDockVsto
         private void SaveHidden()
         {
             File.WriteAllLines(hiddenFile, hidden.OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase), Encoding.UTF8);
+        }
+
+        private Dictionary<string, string> LoadThemes()
+        {
+            var result = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
+            if (!File.Exists(themesFile))
+            {
+                return result;
+            }
+
+            foreach (string line in File.ReadAllLines(themesFile, Encoding.UTF8))
+            {
+                string[] parts = line.Split(new[] { '\t' }, 2);
+                if (parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]) && !string.IsNullOrWhiteSpace(parts[1]))
+                {
+                    result[parts[0]] = parts[1];
+                }
+            }
+
+            return result;
+        }
+
+        private void SaveThemes()
+        {
+            File.WriteAllLines(
+                themesFile,
+                themes.OrderBy(item => item.Key, StringComparer.CurrentCultureIgnoreCase).Select(item => item.Key + "\t" + item.Value),
+                Encoding.UTF8);
+        }
+
+        private HashSet<string> LoadThemeCatalog()
+        {
+            if (!File.Exists(themeCatalogFile))
+            {
+                return new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+            }
+
+            return new HashSet<string>(
+                File.ReadAllLines(themeCatalogFile, Encoding.UTF8).Select(NormalizeThemeName).Where(item => !string.IsNullOrWhiteSpace(item)),
+                StringComparer.CurrentCultureIgnoreCase);
+        }
+
+        private void SaveThemeCatalog()
+        {
+            File.WriteAllLines(themeCatalogFile, themeCatalog.OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase), Encoding.UTF8);
+        }
+
+        private void EnsureDefaultThemeCatalog()
+        {
+            themeCatalog.Add("General");
+            themeCatalog.Add("Projects");
+            themeCatalog.Add(AppText.Get(GetLanguage(), "NoTheme"));
+            SaveThemeCatalog();
+        }
+
+        private static string NormalizeThemeName(string name)
+        {
+            return string.IsNullOrWhiteSpace(name) ? string.Empty : name.Trim();
+        }
+
+        private bool IsDefaultTheme(string name)
+        {
+            return string.Equals(name, "General", StringComparison.CurrentCultureIgnoreCase)
+                || string.Equals(name, AppText.Get(GetLanguage(), "NoTheme"), StringComparison.CurrentCultureIgnoreCase);
         }
     }
 }

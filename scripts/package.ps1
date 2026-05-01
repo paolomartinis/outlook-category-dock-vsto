@@ -1,5 +1,5 @@
 param(
-  [string]$Version = "1.0"
+  [string]$Version = "1.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +32,7 @@ New-Item -ItemType Directory -Path $scriptsRoot | Out-Null
 
 Get-ChildItem -Path $release -File | Where-Object Extension -ne ".pdb" | Copy-Item -Destination $packageRoot -Force
 Copy-Item -Path (Join-Path $PSScriptRoot "install-package.ps1") -Destination $scriptsRoot -Force
+Copy-Item -Path (Join-Path $PSScriptRoot "Install Category Dock.cmd") -Destination $packageRoot -Force
 Copy-Item -Path (Join-Path $PSScriptRoot "uninstall.ps1") -Destination $scriptsRoot -Force
 Copy-Item -Path (Join-Path $root "README.md") -Destination $packageRoot -Force
 

@@ -2,6 +2,10 @@
 
 Outlook classic VSTO add-in for category assignment, category management, and category-based search.
 
+## Version
+
+Current development package: **1.1**.
+
 ## Requirements
 
 - Outlook classic for Windows.
@@ -23,14 +27,16 @@ Reopen Outlook classic and look for **Category Dock VSTO** in COM add-ins and **
 Create a distributable zip:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1 -Version 1.0
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1 -Version 1.1
 ```
 
-The package is created under `dist\CategoryDockVsto-1.0.zip`.
+The package is created under `dist\CategoryDockVsto-1.1.zip`.
 
 ## Package Install
 
-Extract the zip, close Outlook, then run:
+Extract the zip, close Outlook, then double-click `Install Category Dock.cmd`.
+
+Alternatively, run:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-package.ps1
@@ -41,3 +47,7 @@ To uninstall:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\uninstall.ps1
 ```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
